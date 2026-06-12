@@ -1,0 +1,24 @@
+# --- Secrets: NEVER commit these ---
+.env
+*.env
+
+# --- Python virtual environment (recreated from requirements.txt) ---
+venv/
+.venv/
+
+# --- Python cache / build junk ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# --- Jupyter notebook checkpoints ---
+.ipynb_checkpoints/
+
+# --- Crawler dev cache (raw scraped HTML during development) ---
+cache/
+
+# --- OS / editor junk ---
+.DS_Store
+Thumbs.db
+.vscode/
