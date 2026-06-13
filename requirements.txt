@@ -1,0 +1,10 @@
+# Direct dependencies for PowerballBot (pinned for reproducibility).
+# Reinstall into a fresh venv with:  pip install -r requirements.txt
+
+# --- Data analysis (Step 1a exploration + predictor) ---
+pandas==3.0.3
+matplotlib==3.11.0
+
+# --- Notebook engine (so Cursor/Jupyter can run exploration.ipynb) ---
+jupyter==1.1.1
+ipykernel==7.3.0
