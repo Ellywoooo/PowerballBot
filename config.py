@@ -18,3 +18,11 @@ RECENT_DRAWS = 52
 NUM_LINES = 8
 MAX_SHARED = 2
 CANDIDATE_POOL_SIZE = 18
+
+# --- Crawler ---
+# API URL for Lotto NZ results
+CRAWLER_URL = "https://pathway.mylotto.co.nz/api/results/v1/results/lotto"
+USER_AGENT = "PowerballBot/1.0 (learning project; github.com/Ellywoooo/PowerballBot)"
+REQUEST_DELAY_MIN = 1.5
+REQUEST_DELAY_MAX = 3.0
+CACHE_DIR = "cache"
