@@ -4,9 +4,8 @@
 import random
 import time
 import uuid
-
+import pandas as pd
 import requests
-
 import config
 
 
@@ -52,6 +51,35 @@ def parse_draw(data):
         "Powerball": int(powerball["powerballWinningNumber"]),
     }
 
-if __name__ == "__main__":
+# Read the data from the CSV file
+# Check if the draw number is already in the CSV file
+# If it is, return False
+# If it is not, append the row to the CSV file and return True
+def append_if_new(row, path=config.DATA_PATH):
+    """Append row to CSV if draw_number not already stored. Returns True if added."""
+    df = pd.read_csv(path)
+
+    if row["Draw"] in df["Draw"].values:
+        return False
+
+    new_row = pd.DataFrame([row])
+    df = pd.concat([new_row, df], ignore_index=True)
+    df.to_csv(path, index=False)
+    return True
+
+# Crawl the latest draw
+# Fetch the latest draw from the API
+# Parse the draw into a row
+# Append the row to the CSV file if it is not already in the CSV file
+# Print a message if the draw was added or if it was already in the CSV file
+def crawl():
     data = fetch_latest_draw()
-    print(data)
+    row = parse_draw(data)
+
+    if append_if_new(row):
+        print(f"Added draw {row['Draw']} ({row['Date']})")
+    else:
+        print(f"Draw {row['Draw']} already in CSV — no update needed")
+
+if __name__ == "__main__":
+    crawl()
