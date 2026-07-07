@@ -8,3 +8,7 @@ matplotlib==3.11.0
 # --- Notebook engine (so Cursor/Jupyter can run exploration.ipynb) ---
 jupyter==1.1.1
 ipykernel==7.3.0
+
+# --- Slack integration ---
+requests==2.32.3
+python-dotenv==1.0.1
