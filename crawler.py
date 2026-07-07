@@ -23,7 +23,7 @@ def fetch_latest_draw():
 
     response = requests.get(config.CRAWLER_URL, headers=headers, timeout=15)
 
-    if response.status_code in (429, 503):
+    if response.status_code in {429, 503}:
         raise RuntimeError(f"Rate limited / server busy: {response.status_code}")
     if response.status_code != 200:
         raise RuntimeError(f"Fetch failed: {response.status_code} {response.text[:200]}")
