@@ -1,11 +1,27 @@
+# GitHub Actions workflow to run the Lotto Powerball Bot
+# This workflow is scheduled to run every Wednesday and Saturday at 9:00 UTC
+
 name: Lotto Powerball Bot
 
 on:
   schedule:
-    # Wed & Sat 09:00 UTC (~9-10pm NZ draw night; adjust if needed)
-    - cron: "0 9 * * 3"
-    - cron: "0 9 * * 6"
+    # NZ is UTC+12 in July (NZST).
+    # Prediction before sales close: 19:15 NZST (07:15 UTC) Wed/Sat
+    - cron: "15 7 * * 3"
+    - cron: "15 7 * * 6"
+    # Results after draw: 21:15 NZST (09:15 UTC) Wed/Sat
+    - cron: "15 9 * * 3"
+    - cron: "15 9 * * 6"
   workflow_dispatch:
+    inputs:
+      mode:
+        description: "What to send to Slack"
+        type: choice
+        required: true
+        default: predict
+        options:
+          - predict
+          - results
 
 permissions:
   contents: write
@@ -17,6 +33,9 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -29,7 +48,17 @@ jobs:
       - name: Run Powerball bot
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-        run: python main.py
+        run: |
+          MODE="${{ github.event.inputs.mode }}"
+          if [ -z "$MODE" ]; then
+            case "${{ github.event.schedule }}" in
+              "15 7 * * 3"|"15 7 * * 6") MODE="predict" ;;
+              "15 9 * * 3"|"15 9 * * 6") MODE="results" ;;
+              *) MODE="predict" ;;
+            esac
+          fi
+          echo "Running mode=$MODE"
+          python main.py --mode "$MODE"
 
       - name: Commit updated draw data
         if: success()
@@ -38,4 +67,4 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add data/draws_clean.csv
           git diff --staged --quiet || git commit -m "chore: update draws_clean.csv from scheduled run"
-          git push
+          git push origin HEAD:main

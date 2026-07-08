@@ -32,12 +32,46 @@ def send_slack(message, webhook_url):
         )
     return response
 
+# Format the latest winning results into a Slack message.
+# Input: dict row from crawler.parse_draw()
+# Output: String formatted for Slack webhook
+def format_results_message(draw_row):
+    mains = [
+        int(draw_row["Winning Number 1"]),
+        int(draw_row["2"]),
+        int(draw_row["3"]),
+        int(draw_row["4"]),
+        int(draw_row["5"]),
+        int(draw_row["6"]),
+    ]
+    bonus = int(draw_row["Bonus Number"])
+    powerball = int(draw_row["Powerball"])
+
+    mains_text = " ".join(f"{n:02d}" for n in sorted(mains))
+    return "\n".join(
+        [
+            "Latest NZ Lotto results",
+            f"Draw {draw_row['Draw']} ({draw_row['Date']})",
+            f"Mains: {mains_text}",
+            f"Bonus: {bonus:02d}",
+            f"Powerball: {powerball}",
+        ]
+    )
+
 # Load URL from .env -> format -> send.
 def notify(lines_df):
     webhook_url = os.getenv("SLACK_WEBHOOK_URL")
     if not webhook_url:
         raise ValueError("SLACK_WEBHOOK_URL not set in .env")
     message = format_message(lines_df)
+    send_slack(message, webhook_url)
+
+
+def notify_results(draw_row):
+    webhook_url = os.getenv("SLACK_WEBHOOK_URL")
+    if not webhook_url:
+        raise ValueError("SLACK_WEBHOOK_URL not set in .env")
+    message = format_results_message(draw_row)
     send_slack(message, webhook_url)
 
 # Test the notifier
