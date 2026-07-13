@@ -1,17 +1,16 @@
 # GitHub Actions workflow to run the Lotto Powerball Bot
-# This workflow is scheduled to run every Wednesday and Saturday at 9:00 UTC
+# Cron times are UTC. NZ is UTC+12 in winter (NZST), UTC+13 in summer (NZDT).
 
 name: Lotto Powerball Bot
 
 on:
   schedule:
-    # NZ is UTC+12 in July (NZST).
-    # Prediction before sales close: 19:15 NZST (07:15 UTC) Wed/Sat
-    - cron: "15 7 * * 3"
-    - cron: "15 7 * * 6"
-    # Results after draw: 21:15 NZST (09:15 UTC) Wed/Sat
-    - cron: "15 9 * * 3"
-    - cron: "15 9 * * 6"
+    # Prediction ~3:00pm NZST (03:00 UTC) Wed/Sat
+    - cron: "0 3 * * 3"
+    - cron: "0 3 * * 6"
+    # Results ~9:30pm NZST (09:30 UTC) Wed/Sat
+    - cron: "30 9 * * 3"
+    - cron: "30 9 * * 6"
   workflow_dispatch:
     inputs:
       mode:
@@ -52,8 +51,8 @@ jobs:
           MODE="${{ github.event.inputs.mode }}"
           if [ -z "$MODE" ]; then
             case "${{ github.event.schedule }}" in
-              "15 7 * * 3"|"15 7 * * 6") MODE="predict" ;;
-              "15 9 * * 3"|"15 9 * * 6") MODE="results" ;;
+              "0 3 * * 3"|"0 3 * * 6") MODE="predict" ;;
+              "30 9 * * 3"|"30 9 * * 6") MODE="results" ;;
               *) MODE="predict" ;;
             esac
           fi
