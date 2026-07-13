@@ -73,6 +73,7 @@ def append_if_new(row, path=config.DATA_PATH):
 # Append the row to the CSV file if it is not already in the CSV file
 # Print a message if the draw was added or if it was already in the CSV file
 def crawl():
+    """Fetch latest draw, save to CSV if new. Returns the parsed row."""
     data = fetch_latest_draw()
     row = parse_draw(data)
 
@@ -80,6 +81,8 @@ def crawl():
         print(f"Added draw {row['Draw']} ({row['Date']})")
     else:
         print(f"Draw {row['Draw']} already in CSV — no update needed")
+
+    return row
 
 if __name__ == "__main__":
     crawl()

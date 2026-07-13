@@ -2,8 +2,8 @@
 Orchestrator for PowerballBot.
 
 Modes:
-- predict: crawl → score → generate lines → Slack
-- results: fetch latest draw → Slack (winning numbers)
+- predict: score → generate lines → Slack (uses existing CSV)
+- results: fetch latest draw → save to CSV → Slack (winning numbers)
 """
 
 import argparse
@@ -18,8 +18,6 @@ from notifier import notify, notify_results
 
 
 def run_predict():
-    crawler.crawl()
-
     df = load_draws()
     main_score = compute_main_scores(df)
     powerball_score = compute_powerball_scores(df)
@@ -28,8 +26,7 @@ def run_predict():
 
 
 def run_results():
-    data = crawler.fetch_latest_draw()
-    row = crawler.parse_draw(data)
+    row = crawler.crawl()
     notify_results(row)
 
 

@@ -60,7 +60,7 @@ jobs:
           python main.py --mode "$MODE"
 
       - name: Commit updated draw data
-        if: success()
+        if: success() && ((github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'results') || (github.event_name == 'schedule' && (github.event.schedule == '30 9 * * 3' || github.event.schedule == '30 9 * * 6')))
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
