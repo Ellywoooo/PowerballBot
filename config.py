@@ -18,6 +18,7 @@ RECENT_DRAWS = 52
 NUM_LINES = 8
 MAX_SHARED = 2
 CANDIDATE_POOL_SIZE = 18
+SAMPLE_POOL_SIZE = 100  # top-score combos to weighted-sample from
 
 # --- Crawler ---
 # API URL for Lotto NZ results

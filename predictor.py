@@ -15,6 +15,7 @@ lines = generate_lines(main_score, powerball_score)
 print(lines)
 """
 
+import numpy as np
 import pandas as pd
 import config
 from itertools import combinations # for generating combinations of numbers.
@@ -174,15 +175,18 @@ def _too_similar(mains, chosen, max_shared=config.MAX_SHARED):
     return any(len(set(mains) & set(prev)) > max_shared for prev in chosen)
 
 # Generate the lines.
-# Input: main_score, powerball_score.
+# Input: main_score, powerball_score, optional seed.
 # Process:
-# 1. Sort the main_score by descending order.
-# 2. Generate all possible combinations of 6 numbers from the main_score.
-# 3. Filter the combinations by the passes_filters function.
-# 4. Sort the combinations by the score.
-# 5. Return the combinations.
-# Output: pandas DataFrame, the lines.
-def generate_lines(main_score, powerball_score):
+# 1. Take top CANDIDATE_POOL_SIZE numbers by score.
+# 2. Generate 6-number combos, keep those that pass filters.
+# 3. Sort by score, keep top SAMPLE_POOL_SIZE as the sampling pool.
+# 4. Weighted-random sample without replacement (higher score → higher chance),
+#    rejecting combos that are too similar to ones already chosen.
+# 5. Assign Powerballs randomly from the top Powerball candidates.
+# Output: pandas DataFrame of NUM_LINES lines.
+def generate_lines(main_score, powerball_score, seed=None):
+  rng = np.random.default_rng(seed)
+
   candidates = main_score.sort_values(ascending=False).head(config.CANDIDATE_POOL_SIZE).index.tolist()
 
   rows = []
@@ -196,22 +200,35 @@ def generate_lines(main_score, powerball_score):
       "m4": mains[3], "m5": mains[4], "m6": mains[5],
     })
 
-  combo_df = pd.DataFrame(rows).sort_values("score", ascending=False).reset_index(drop=True)
+  combo_df = (
+    pd.DataFrame(rows)
+    .sort_values("score", ascending=False)
+    .head(config.SAMPLE_POOL_SIZE)
+    .reset_index(drop=True)
+  )
 
   chosen_mains = []
-  for _, row in combo_df.iterrows():
-    mains = _mains_from_row(row)
-    if mains in chosen_mains or _too_similar(mains, chosen_mains):
-      continue
-    chosen_mains.append(mains)
-    if len(chosen_mains) >= config.NUM_LINES:
-      break
+  available = combo_df.copy()
 
-  top_pbs = powerball_score.sort_values(ascending=False).head(5).index.tolist()
+  while len(chosen_mains) < config.NUM_LINES and len(available) > 0:
+    weights = available["score"].to_numpy(dtype=float)
+    if weights.sum() <= 0:
+      weights = np.ones(len(available), dtype=float)
+    probs = weights / weights.sum()
+
+    idx = int(rng.choice(len(available), p=probs))
+    mains = _mains_from_row(available.iloc[idx])
+
+    if mains not in chosen_mains and not _too_similar(mains, chosen_mains):
+      chosen_mains.append(mains)
+
+    available = available.drop(available.index[idx]).reset_index(drop=True)
+
+  top_pbs = powerball_score.sort_values(ascending=False).head(5).index.to_numpy()
 
   final_rows = []
   for i, mains in enumerate(chosen_mains):
-    pb = top_pbs[i % len(top_pbs)]
+    pb = int(rng.choice(top_pbs))
     final_rows.append({
       "line_no": i + 1,
       "line": " ".join(f"{n:02d}" for n in mains),
