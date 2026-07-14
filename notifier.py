@@ -67,12 +67,57 @@ def notify(lines_df):
     send_slack(message, webhook_url)
 
 
-def notify_results(draw_row):
+def notify_results(draw_row, comparison=None):
     webhook_url = os.getenv("SLACK_WEBHOOK_URL")
     if not webhook_url:
         raise ValueError("SLACK_WEBHOOK_URL not set in .env")
-    message = format_results_message(draw_row)
+    if comparison is None:
+        message = format_results_message(draw_row)
+    else:
+        message = format_result_message(draw_row, comparison)
     send_slack(message, webhook_url)
+
+
+def format_result_message(actual_row, comparison):
+    """
+    Build a Slack message with winning numbers + how each prediction matched.
+    Input: actual draw row + list from compare_prediction_to_actual()
+    """
+    mains = [
+        int(actual_row["Winning Number 1"]),
+        int(actual_row["2"]),
+        int(actual_row["3"]),
+        int(actual_row["4"]),
+        int(actual_row["5"]),
+        int(actual_row["6"]),
+    ]
+    mains_text = " ".join(f"{n:02d}" for n in sorted(mains))
+    powerball = int(actual_row["Powerball"])
+
+    lines = [
+        f"🎯 Today's Result: {mains_text} + PB {powerball}",
+        "",
+        "Your predictions:",
+    ]
+
+    for item in comparison:
+        line_no = item["line"]
+        matches = item["main_matches"]
+        pb = item["powerball_match"]
+        noun = "number" if matches == 1 else "numbers"
+        suffix = " + Powerball!" if pb else ""
+        lines.append(f"{line_no}. {matches} {noun} matched{suffix}")
+
+    best = max(
+        comparison,
+        key=lambda item: (item["main_matches"], item["powerball_match"]),
+    )
+    best_pb = " + PB" if best["powerball_match"] else ""
+    lines.append("")
+    lines.append(
+        f"Best line: #{best['line']} with {best['main_matches']} matches{best_pb}"
+    )
+    return "\n".join(lines)
 
 # Test the notifier
 if __name__ == "__main__":

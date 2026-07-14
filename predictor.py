@@ -203,26 +203,36 @@ def generate_lines(main_score, powerball_score, seed=None):
   combo_df = (
     pd.DataFrame(rows)
     .sort_values("score", ascending=False)
-    .head(config.SAMPLE_POOL_SIZE)
     .reset_index(drop=True)
   )
 
   chosen_mains = []
-  available = combo_df.copy()
+  pool_start = 0
 
-  while len(chosen_mains) < config.NUM_LINES and len(available) > 0:
-    weights = available["score"].to_numpy(dtype=float)
-    if weights.sum() <= 0:
-      weights = np.ones(len(available), dtype=float)
-    probs = weights / weights.sum()
+  # Prefer the top SAMPLE_POOL_SIZE by score, but expand deeper when
+  # diversity (_too_similar) leaves us short of NUM_LINES.
+  while len(chosen_mains) < config.NUM_LINES and pool_start < len(combo_df):
+    available = (
+      combo_df
+      .iloc[pool_start:pool_start + config.SAMPLE_POOL_SIZE]
+      .copy()
+      .reset_index(drop=True)
+    )
+    pool_start += config.SAMPLE_POOL_SIZE
 
-    idx = int(rng.choice(len(available), p=probs))
-    mains = _mains_from_row(available.iloc[idx])
+    while len(chosen_mains) < config.NUM_LINES and len(available) > 0:
+      weights = available["score"].to_numpy(dtype=float)
+      if weights.sum() <= 0:
+        weights = np.ones(len(available), dtype=float)
+      probs = weights / weights.sum()
 
-    if mains not in chosen_mains and not _too_similar(mains, chosen_mains):
-      chosen_mains.append(mains)
+      idx = int(rng.choice(len(available), p=probs))
+      mains = _mains_from_row(available.iloc[idx])
 
-    available = available.drop(available.index[idx]).reset_index(drop=True)
+      if mains not in chosen_mains and not _too_similar(mains, chosen_mains):
+        chosen_mains.append(mains)
+
+      available = available.drop(available.index[idx]).reset_index(drop=True)
 
   top_pbs = powerball_score.sort_values(ascending=False).head(5).index.to_numpy()
 

@@ -1,5 +1,7 @@
 # --- Paths ---
 DATA_PATH = "data/draws_clean.csv"
+PREDICTIONS_LATEST_PATH = "predictions/latest.csv"
+PREDICTIONS_HISTORY_PATH = "predictions/history.csv"
 
 # --- Columns ---
 MAIN_COLUMNS = [

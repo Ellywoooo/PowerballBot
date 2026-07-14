@@ -59,11 +59,11 @@ jobs:
           echo "Running mode=$MODE"
           python main.py --mode "$MODE"
 
-      - name: Commit updated draw data
-        if: success() && ((github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'results') || (github.event_name == 'schedule' && (github.event.schedule == '30 9 * * 3' || github.event.schedule == '30 9 * * 6')))
+      - name: Commit updated data
+        if: success()
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add data/draws_clean.csv
-          git diff --staged --quiet || git commit -m "chore: update draws_clean.csv from scheduled run"
+          git add data/draws_clean.csv predictions/
+          git diff --staged --quiet || git commit -m "chore: update draw data and predictions from scheduled run"
           git push origin HEAD:main
