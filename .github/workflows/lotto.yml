@@ -5,12 +5,14 @@ name: Lotto Powerball Bot
 
 on:
   schedule:
-    # Prediction ~3:00pm NZST (03:00 UTC) Wed/Sat
-    - cron: "0 3 * * 3"
-    - cron: "0 3 * * 6"
-    # Results ~9:30pm NZST (09:30 UTC) Wed/Sat
-    - cron: "30 9 * * 3"
-    - cron: "30 9 * * 6"
+    # Start early to absorb GitHub Actions cron delay (often 1-2h late).
+    # Prediction target ~3pm NZ: fire at 1:00pm NZST (01:00 UTC) Wed/Sat
+    - cron: "0 1 * * 3"
+    - cron: "0 1 * * 6"
+    # Results target ~9:30pm NZ: fire at 8:00pm NZST (08:00 UTC) Wed/Sat
+    # (after ~7:30pm sales close, so draw is more likely published)
+    - cron: "0 8 * * 3"
+    - cron: "0 8 * * 6"
   workflow_dispatch:
     inputs:
       mode:
@@ -51,8 +53,8 @@ jobs:
           MODE="${{ github.event.inputs.mode }}"
           if [ -z "$MODE" ]; then
             case "${{ github.event.schedule }}" in
-              "0 3 * * 3"|"0 3 * * 6") MODE="predict" ;;
-              "30 9 * * 3"|"30 9 * * 6") MODE="results" ;;
+              "0 1 * * 3"|"0 1 * * 6") MODE="predict" ;;
+              "0 8 * * 3"|"0 8 * * 6") MODE="results" ;;
               *) MODE="predict" ;;
             esac
           fi
