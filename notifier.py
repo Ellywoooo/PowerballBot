@@ -1,4 +1,5 @@
 import os
+from datetime import datetime, timezone
 
 import requests
 from dotenv import load_dotenv
@@ -76,6 +77,30 @@ def notify_results(draw_row, comparison=None):
     else:
         message = format_result_message(draw_row, comparison)
     send_slack(message, webhook_url)
+
+
+def notify_error(step, error, mode):
+    """
+    Send a Slack alert when a pipeline step fails.
+    Failures here are printed only — never raise secondary errors.
+    """
+    try:
+        webhook_url = os.getenv("SLACK_WEBHOOK_URL")
+        if not webhook_url:
+            raise ValueError("SLACK_WEBHOOK_URL not set in .env")
+
+        timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+        message = (
+            f"⚠️ Lotto bot failed (mode: {mode})\n"
+            f"\n"
+            f"Step: {step}\n"
+            f"Error: {error}\n"
+            f"\n"
+            f"Time: {timestamp}"
+        )
+        send_slack(message, webhook_url)
+    except Exception as exc:
+        print(f"Failed to send error notification: {exc}")
 
 
 def format_result_message(actual_row, comparison):
