@@ -14,7 +14,7 @@ from predictor import (
     compute_powerball_scores,
     generate_lines,
 )
-from notifier import notify, notify_results
+from notifier import notify, notify_results, notify_error
 from scorer import (
     save_predictions,
     compare_prediction_to_actual,
@@ -23,20 +23,52 @@ from scorer import (
 
 
 def run_predict():
-    df = load_draws()
-    main_score = compute_main_scores(df)
-    powerball_score = compute_powerball_scores(df)
-    lines = generate_lines(main_score, powerball_score)
-    save_predictions(lines)
-    notify(lines)
+    mode = "predict"
+
+    try:
+        df = load_draws()
+        main_score = compute_main_scores(df)
+        powerball_score = compute_powerball_scores(df)
+        lines = generate_lines(main_score, powerball_score)
+    except Exception as exc:
+        notify_error("predictor", str(exc), mode)
+        raise
+
+    try:
+        save_predictions(lines)
+    except Exception as exc:
+        notify_error("scorer", str(exc), mode)
+        raise
+
+    try:
+        notify(lines)
+    except Exception as exc:
+        notify_error("notifier", str(exc), mode)
+        raise
 
 
 def run_results():
-    row = crawler.crawl()
-    comparison = compare_prediction_to_actual(row)
-    if comparison is not None:
-        archive_predictions(row, comparison)
-    notify_results(row, comparison)
+    mode = "results"
+
+    try:
+        row = crawler.crawl()
+    except Exception as exc:
+        notify_error("crawler", str(exc), mode)
+        raise
+
+    try:
+        comparison = compare_prediction_to_actual(row)
+        if comparison is not None:
+            archive_predictions(row, comparison)
+    except Exception as exc:
+        notify_error("scorer", str(exc), mode)
+        raise
+
+    try:
+        notify_results(row, comparison)
+    except Exception as exc:
+        notify_error("notifier", str(exc), mode)
+        raise
 
 
 def main():
