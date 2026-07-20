@@ -40,8 +40,11 @@ def run_predict():
         notify_error("scorer", str(exc), mode)
         raise
 
+    # Never raises — returns None if scrape fails; omit jackpot line then.
+    jackpot_amount = crawler.fetch_jackpot_from_homepage()
+
     try:
-        notify(lines)
+        notify(lines, jackpot_amount=jackpot_amount)
     except Exception as exc:
         notify_error("notifier", str(exc), mode)
         raise
@@ -51,13 +54,13 @@ def run_results():
     mode = "results"
 
     try:
-        row = crawler.crawl()
+        row, dividends = crawler.crawl()
     except Exception as exc:
         notify_error("crawler", str(exc), mode)
         raise
 
     try:
-        comparison = compare_prediction_to_actual(row)
+        comparison = compare_prediction_to_actual(row, dividends=dividends)
         if comparison is not None:
             archive_predictions(row, comparison)
     except Exception as exc:
@@ -65,7 +68,7 @@ def run_results():
         raise
 
     try:
-        notify_results(row, comparison)
+        notify_results(row, comparison, dividends)
     except Exception as exc:
         notify_error("notifier", str(exc), mode)
         raise
