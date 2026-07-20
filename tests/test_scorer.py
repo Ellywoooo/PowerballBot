@@ -1,12 +1,16 @@
 """Tests for prediction vs actual comparison."""
 
 import pandas as pd
+import pytest
 
 from notifier import format_result_message
 from scorer import (
     save_predictions,
     compare_prediction_to_actual,
     archive_predictions,
+    determine_division,
+    parse_prize_value,
+    division_one_status,
 )
 
 
@@ -73,6 +77,62 @@ def _actual_row(
     }
 
 
+def _fake_dividends():
+    return {
+        "lottoWinners": [
+            {"division": 1, "prizeValue": "1000000.00", "numberOfWinners": 1},
+            {"division": 3, "prizeValue": "702.00", "numberOfWinners": 670},
+            {"division": 7, "prizeValue": "Bonus Ticket", "numberOfWinners": 399628},
+        ],
+        "powerballWinners": [
+            {"division": 1, "prizeValue": "ROLLOVER", "numberOfWinners": 0},
+            {
+                "division": 2,
+                "prizeValue": "11277.00",
+                "numberOfWinners": 3,
+                "combinedPrizeValue": "39190.00",
+            },
+            {
+                "division": 7,
+                "prizeValue": "15.00",
+                "numberOfWinners": 32073,
+                "combinedPrizeValue": "Bonus Ticket + 15.00",
+            },
+        ],
+    }
+
+
+@pytest.mark.parametrize(
+    "main_matches, bonus_match, expected",
+    [
+        (6, False, 1),
+        (6, True, 1),
+        (5, True, 2),
+        (5, False, 3),
+        (4, True, 4),
+        (4, False, 5),
+        (3, True, 6),
+        (3, False, 7),
+        (2, True, None),
+        (0, False, None),
+    ],
+)
+def test_determine_division(main_matches, bonus_match, expected):
+    assert determine_division(main_matches, bonus_match) == expected
+
+
+def test_parse_prize_value():
+    assert parse_prize_value("702.00") == 702.0
+    assert parse_prize_value("ROLLOVER") is None
+    assert parse_prize_value("Bonus Ticket") is None
+
+
+def test_division_one_status():
+    dividends = _fake_dividends()
+    status = division_one_status(dividends)
+    assert status == {"lotto_won": True, "powerball_won": False}
+
+
 def test_save_and_compare(tmp_path):
     latest = tmp_path / "latest.csv"
     lines = _fake_lines_df()
@@ -95,16 +155,65 @@ def test_save_and_compare(tmp_path):
     assert pd.isna(saved.loc[0, "Draw"])
 
     comparison = compare_prediction_to_actual(_actual_row(), path=latest)
-    assert comparison == [
-        {"line": 1, "main_matches": 2, "powerball_match": False},  # 10, 22
-        {"line": 2, "main_matches": 2, "powerball_match": True},   # 22, 40 + PB
-        {"line": 3, "main_matches": 1, "powerball_match": False},  # 10
-    ]
+    assert comparison[0] == {
+        "line": 1,
+        "main_matches": 2,
+        "bonus_match": False,
+        "powerball_match": False,
+        "division": None,
+        "prize_amount": None,
+        "prize_note": None,
+    }
+    assert comparison[1]["main_matches"] == 2
+    assert comparison[1]["powerball_match"] is True
 
 
 def test_compare_returns_none_when_no_predictions_file(tmp_path):
     missing = tmp_path / "does_not_exist.csv"
     assert compare_prediction_to_actual(_actual_row(), path=missing) is None
+
+
+def test_compare_with_dividends_lotto_and_powerball_wins(tmp_path):
+    latest = tmp_path / "latest.csv"
+
+    # Line A: 5 mains, no bonus -> division 3, lotto prize $702
+    save_predictions(
+        _single_line_df(line="10 21 22 26 37 30", powerball=9),
+        path=latest,
+    )
+    lotto_only = compare_prediction_to_actual(
+        _actual_row(), path=latest, dividends=_fake_dividends()
+    )
+    assert lotto_only[0]["division"] == 3
+    assert lotto_only[0]["prize_amount"] == 702.0
+    assert lotto_only[0]["prize_note"] is None
+
+    # Line B: 3 mains + PB match -> division 7, combined prize from powerballWinners
+    save_predictions(
+        _single_line_df(line="10 21 22 30 31 32", powerball=7),
+        path=latest,
+    )
+    pb_win = compare_prediction_to_actual(
+        _actual_row(), path=latest, dividends=_fake_dividends()
+    )
+    assert pb_win[0]["division"] == 7
+    assert pb_win[0]["prize_amount"] == 15.0
+    assert pb_win[0]["prize_note"] is None
+
+
+def test_compare_bonus_ticket_prize_note(tmp_path):
+    latest = tmp_path / "latest.csv"
+    # 3 mains, no bonus, no PB -> division 7 lotto only -> Bonus Ticket
+    save_predictions(
+        _single_line_df(line="10 21 22 30 31 32", powerball=9),
+        path=latest,
+    )
+    comparison = compare_prediction_to_actual(
+        _actual_row(), path=latest, dividends=_fake_dividends()
+    )
+    assert comparison[0]["division"] == 7
+    assert comparison[0]["prize_amount"] is None
+    assert comparison[0]["prize_note"] == "Bonus Ticket"
 
 
 def test_archive_predictions(tmp_path, monkeypatch):
@@ -138,7 +247,7 @@ def test_archive_predictions_creates_header_on_first_write(tmp_path, monkeypatch
     archive_predictions(actual, comparison, path=latest)
 
     raw = history.read_text(encoding="utf-8").strip().splitlines()
-    assert len(raw) == 2  # header + one data row
+    assert len(raw) == 2
     assert raw[0].startswith("Draw,Line,Number 1")
 
     hist = pd.read_csv(history)
@@ -164,7 +273,7 @@ def test_archive_predictions_appends_without_duplicate_header(tmp_path, monkeypa
     raw = history.read_text(encoding="utf-8").strip().splitlines()
     header_count = sum(1 for line in raw if line.startswith("Draw,Line,"))
     assert header_count == 1
-    assert len(raw) == 3  # header + two data rows
+    assert len(raw) == 3
 
     hist = pd.read_csv(history)
     assert len(hist) == 2
@@ -173,7 +282,6 @@ def test_archive_predictions_appends_without_duplicate_header(tmp_path, monkeypa
 
 def test_main_matches_count_is_accurate(tmp_path):
     latest = tmp_path / "latest.csv"
-    # Predicted: 10 21 22 30 31 32 — shares 10, 21, 22 with actual (3 matches)
     save_predictions(
         _single_line_df(line="10 21 22 30 31 32", powerball=9),
         path=latest,
@@ -184,15 +292,46 @@ def test_main_matches_count_is_accurate(tmp_path):
     assert len(comparison) == 1
     assert comparison[0]["main_matches"] == 3
     assert comparison[0]["powerball_match"] is False
+    assert comparison[0]["bonus_match"] is False
 
 
-def test_format_result_message_includes_best_line():
+def test_format_result_message_shows_division_and_prizes():
     comparison = [
-        {"line": 1, "main_matches": 2, "powerball_match": False},
-        {"line": 2, "main_matches": 2, "powerball_match": True},
-        {"line": 3, "main_matches": 1, "powerball_match": False},
+        {
+            "line": 1,
+            "main_matches": 2,
+            "bonus_match": False,
+            "powerball_match": False,
+            "division": None,
+            "prize_amount": None,
+            "prize_note": None,
+        },
+        {
+            "line": 2,
+            "main_matches": 3,
+            "bonus_match": True,
+            "powerball_match": False,
+            "division": 6,
+            "prize_amount": 702.0,
+            "prize_note": None,
+        },
+        {
+            "line": 3,
+            "main_matches": 3,
+            "bonus_match": False,
+            "powerball_match": True,
+            "division": 7,
+            "prize_amount": 15.0,
+            "prize_note": None,
+        },
     ]
-    message = format_result_message(_actual_row(), comparison)
+    message = format_result_message(
+        _actual_row(), comparison, dividends=_fake_dividends()
+    )
+
     assert "Today's Result:" in message
-    assert "2. 2 numbers matched + Powerball!" in message
-    assert "Best line: #2 with 2 matches + PB" in message
+    assert "Division 1: Lotto WON $1M | Powerball not won, rolls over" in message
+    assert "1. Main: 2 matched | Bonus: No | Powerball: No" in message
+    assert "2. Main: 3 matched | Bonus: Yes | Powerball: No — Won $702!" in message
+    assert "3. Main: 3 matched | Bonus: No | Powerball: Yes — Won $15 (Div 7)!" in message
+    assert "Best line" not in message

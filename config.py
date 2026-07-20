@@ -25,6 +25,9 @@ SAMPLE_POOL_SIZE = 100  # top-score combos to weighted-sample from
 # --- Crawler ---
 # API URL for Lotto NZ results
 CRAWLER_URL = "https://pathway.mylotto.co.nz/api/results/v1/results/lotto"
+HOMEPAGE_URL = "https://mylotto.co.nz"
+# CMS homepage content (includes Powerball jackpot banner alt text)
+CONTENT_HOME_URL = "https://pathway.mylotto.co.nz/api/content/pages/home"
 USER_AGENT = "PowerballBot/1.0 (learning project; github.com/Ellywoooo/PowerballBot)"
 REQUEST_DELAY_MIN = 1.5
 REQUEST_DELAY_MAX = 3.0

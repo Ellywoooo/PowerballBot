@@ -17,6 +17,7 @@ __pycache__/
 
 # --- Crawler dev cache (raw scraped HTML during development) ---
 cache/
+sample_response.json
 
 # --- OS / editor junk ---
 .DS_Store

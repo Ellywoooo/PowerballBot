@@ -9,9 +9,10 @@ matplotlib==3.11.0
 jupyter==1.1.1
 ipykernel==7.3.0
 
-# --- Slack integration ---
+# --- Slack integration / HTTP scraping ---
 requests==2.32.3
 python-dotenv==1.0.1
+beautifulsoup4==4.13.4
 
 # --- Tests ---
 pytest==8.3.5

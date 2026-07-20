@@ -5,7 +5,12 @@ from unittest.mock import MagicMock, patch
 import pandas as pd
 import pytest
 
-from crawler import parse_draw, append_if_new, fetch_latest_draw
+from crawler import (
+    parse_draw,
+    append_if_new,
+    fetch_latest_draw,
+    fetch_jackpot_from_homepage,
+)
 
 
 def _fake_api_response():
@@ -20,7 +25,9 @@ def _fake_api_response():
         },
         "powerBall": {
             "powerballWinningNumber": "6",
+            "powerballWinners": [],
         },
+        "lottoWinners": [],
     }
 
 
@@ -51,7 +58,7 @@ def _csv_row(
 
 
 def test_parse_draw_matches_csv_shape():
-    row = parse_draw(_fake_api_response())
+    row, dividends = parse_draw(_fake_api_response())
 
     assert row == {
         "Draw": 2602,
@@ -65,6 +72,7 @@ def test_parse_draw_matches_csv_shape():
         "Bonus Number": 15,
         "Powerball": 6,
     }
+    assert dividends == {"lottoWinners": [], "powerballWinners": []}
 
 
 def test_append_if_new_skips_duplicate(tmp_path):
@@ -140,3 +148,37 @@ def test_fetch_latest_draw_returns_json_on_200(mock_get, _mock_sleep):
 
     assert result == payload
     mock_get.assert_called_once()
+
+
+@patch("crawler.time.sleep", return_value=None)
+@patch("crawler.requests.get")
+def test_fetch_jackpot_from_homepage_extracts_amount(mock_get, _mock_sleep):
+    payload = {
+        "attributes": {
+            "components": [
+                {
+                    "value": {
+                        "cms_1_foreground_image": {
+                            "alt_text": (
+                                "Powerball jackpot amount is $35 million "
+                                "this Wednesday. Sales close Wednesday 7:30pm."
+                            )
+                        }
+                    }
+                }
+            ]
+        }
+    }
+    mock_get.return_value = _mock_response(200, payload=payload)
+
+    assert fetch_jackpot_from_homepage() == 35_000_000
+    mock_get.assert_called_once()
+
+
+@patch("crawler.time.sleep", return_value=None)
+@patch("crawler.requests.get")
+def test_fetch_jackpot_from_homepage_returns_none_without_match(mock_get, _mock_sleep):
+    payload = {"attributes": {"components": [{"value": {"title": "No jackpot here"}}]}}
+    mock_get.return_value = _mock_response(200, payload=payload)
+
+    assert fetch_jackpot_from_homepage() is None
