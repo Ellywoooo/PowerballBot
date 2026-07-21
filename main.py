@@ -19,11 +19,21 @@ from scorer import (
     save_predictions,
     compare_prediction_to_actual,
     archive_predictions,
+    should_skip_predict,
+    _latest_completed_draw,
 )
 
 
 def run_predict():
     mode = "predict"
+
+    if should_skip_predict():
+        latest_draw = _latest_completed_draw()
+        print(
+            f"Draw {latest_draw} already archived in history; "
+            "pending prediction still in latest.csv — skipping predict"
+        )
+        return
 
     try:
         df = load_draws()
