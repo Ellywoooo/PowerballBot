@@ -216,6 +216,66 @@ def test_compare_bonus_ticket_prize_note(tmp_path):
     assert comparison[0]["prize_note"] == "Bonus Ticket"
 
 
+def test_archive_predictions_skips_duplicate_draw(tmp_path, monkeypatch):
+    latest = tmp_path / "latest.csv"
+    history = tmp_path / "history.csv"
+    monkeypatch.setattr("scorer.config.PREDICTIONS_HISTORY_PATH", str(history))
+
+    save_predictions(_fake_lines_df(), path=latest)
+    actual = _actual_row()
+    comparison = compare_prediction_to_actual(actual, path=latest)
+
+    assert archive_predictions(actual, comparison, path=latest) is True
+    assert archive_predictions(actual, comparison, path=latest) is False
+
+    hist = pd.read_csv(history)
+    assert len(hist) == 3
+    assert hist["Draw"].nunique() == 1
+
+
+def test_archive_predictions_writes_extended_columns(tmp_path, monkeypatch):
+    latest = tmp_path / "latest.csv"
+    history = tmp_path / "history.csv"
+    monkeypatch.setattr("scorer.config.PREDICTIONS_HISTORY_PATH", str(history))
+
+    save_predictions(
+        _single_line_df(line="10 21 22 30 31 32", powerball=9, score=4.25),
+        path=latest,
+    )
+    actual = _actual_row()
+    comparison = compare_prediction_to_actual(
+        actual, path=latest, dividends=_fake_dividends()
+    )
+
+    assert archive_predictions(actual, comparison, path=latest) is True
+
+    hist = pd.read_csv(history, keep_default_na=False)
+    assert list(hist.columns) == [
+        "Draw",
+        "Line",
+        "Number 1",
+        "Number 2",
+        "Number 3",
+        "Number 4",
+        "Number 5",
+        "Number 6",
+        "Powerball",
+        "Score",
+        "Main Matches",
+        "Bonus Match",
+        "Powerball Match",
+        "Division",
+        "Prize Amount",
+        "Prize Note",
+        "Predicted At",
+    ]
+    assert float(hist.loc[0, "Score"]) == 4.25
+    assert hist.loc[0, "Bonus Match"] in (False, "False")
+    assert int(hist.loc[0, "Division"]) == 7
+    assert hist.loc[0, "Prize Amount"] == ""
+    assert hist.loc[0, "Prize Note"] == "Bonus Ticket"
+
+
 def test_archive_predictions(tmp_path, monkeypatch):
     latest = tmp_path / "latest.csv"
     history = tmp_path / "history.csv"

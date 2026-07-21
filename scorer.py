@@ -42,10 +42,24 @@ HISTORY_COLUMNS = [
     "Line",
     *PRED_NUMBER_COLS,
     "Powerball",
+    "Score",
     "Main Matches",
+    "Bonus Match",
     "Powerball Match",
+    "Division",
+    "Prize Amount",
+    "Prize Note",
     "Predicted At",
 ]
+
+
+def _history_cell(value):
+    """Write blank cells for None/NaN instead of the string 'None'."""
+    if value is None:
+        return ""
+    if isinstance(value, float) and pd.isna(value):
+        return ""
+    return value
 
 
 def _predicted_mains(row):
@@ -128,6 +142,61 @@ def division_one_status(dividends):
     powerball_won = pb_div1 is not None and int(pb_div1.get("numberOfWinners", 0)) > 0
 
     return {"lotto_won": lotto_won, "powerball_won": powerball_won}
+
+
+def _latest_completed_draw(draws_path=None):
+    """Return the most recent draw number in draws_clean.csv."""
+    column_names = [
+        "draw_number",
+        "draw_date",
+        "main_1",
+        "main_2",
+        "main_3",
+        "main_4",
+        "main_5",
+        "main_6",
+        "bonus",
+        "powerball",
+    ]
+    path = draws_path or config.DATA_PATH
+    df = pd.read_csv(path, header=0, names=column_names)
+    df["draw_date"] = pd.to_datetime(df["draw_date"])
+    return int(df.sort_values("draw_date").iloc[-1]["draw_number"])
+
+
+def should_skip_predict(
+    draws_path=None,
+    history_path=None,
+    latest_path=None,
+):
+    """
+    Return True when the latest completed draw is already archived but
+    latest.csv still has a pending prediction (blank Draw).
+
+    This blocks manual re-runs of predict mode after results have already
+    archived that draw. When latest.csv Draw is filled (normal post-results
+    state), predict proceeds so the next draw can be generated.
+    """
+    latest_draw = _latest_completed_draw(draws_path)
+
+    hist_path = Path(history_path or config.PREDICTIONS_HISTORY_PATH)
+    if not hist_path.exists() or hist_path.stat().st_size == 0:
+        return False
+
+    history = pd.read_csv(hist_path)
+    if latest_draw not in history["Draw"].values:
+        return False
+
+    latest_file = Path(latest_path or config.PREDICTIONS_LATEST_PATH)
+    if not latest_file.exists():
+        return False
+
+    latest_pred = pd.read_csv(latest_file)
+    if latest_pred.empty:
+        return False
+
+    draw_val = latest_pred["Draw"].iloc[0]
+    return pd.isna(draw_val)
 
 
 def save_predictions(lines_df, path=config.PREDICTIONS_LATEST_PATH):
@@ -216,7 +285,8 @@ def compare_prediction_to_actual(
 def archive_predictions(actual_row, comparison, path=config.PREDICTIONS_LATEST_PATH):
     """
     Fill Draw on latest.csv and append scored rows to predictions/history.csv.
-    No-op if latest.csv is missing.
+    Skips if this Draw is already archived. Returns True if appended, False if
+    skipped, None if latest.csv is missing.
     """
     latest_path = Path(path)
     if not latest_path.exists() or comparison is None:
@@ -229,6 +299,14 @@ def archive_predictions(actual_row, comparison, path=config.PREDICTIONS_LATEST_P
     draw_number = actual_row["Draw"]
     predictions["Draw"] = draw_number
     predictions.to_csv(latest_path, index=False)
+
+    if history_path.exists() and history_path.stat().st_size > 0:
+        existing = pd.read_csv(history_path)
+        if draw_number in existing["Draw"].values:
+            print(f"Draw {draw_number} already archived, skipping")
+            return False
+    else:
+        existing = None
 
     match_by_line = {item["line"]: item for item in comparison}
     history_rows = []
@@ -246,16 +324,20 @@ def archive_predictions(actual_row, comparison, path=config.PREDICTIONS_LATEST_P
                 "Number 5": int(row["Number 5"]),
                 "Number 6": int(row["Number 6"]),
                 "Powerball": int(row["Powerball"]),
+                "Score": float(row["Score"]),
                 "Main Matches": match["main_matches"],
+                "Bonus Match": match["bonus_match"],
                 "Powerball Match": match["powerball_match"],
+                "Division": _history_cell(match.get("division")),
+                "Prize Amount": _history_cell(match.get("prize_amount")),
+                "Prize Note": _history_cell(match.get("prize_note")),
                 "Predicted At": row["Predicted At"],
             }
         )
 
     history_df = pd.DataFrame(history_rows, columns=HISTORY_COLUMNS)
-    if history_path.exists() and history_path.stat().st_size > 0:
-        history_df.to_csv(history_path, mode="a", header=False, index=False)
-    else:
-        history_df.to_csv(history_path, index=False)
+    if existing is not None:
+        history_df = pd.concat([existing, history_df], ignore_index=True)
 
-    return history_path
+    history_df.to_csv(history_path, index=False)
+    return True
