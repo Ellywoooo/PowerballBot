@@ -130,7 +130,12 @@ def test_parse_prize_value():
 def test_division_one_status():
     dividends = _fake_dividends()
     status = division_one_status(dividends)
-    assert status == {"lotto_won": True, "powerball_won": False}
+    assert status == {
+        "lotto_won": True,
+        "lotto_winners": 1,
+        "powerball_won": False,
+        "powerball_winners": 0,
+    }
 
 
 def test_save_and_compare(tmp_path):
@@ -390,8 +395,32 @@ def test_format_result_message_shows_division_and_prizes():
     )
 
     assert "Today's Result:" in message
-    assert "Division 1: Lotto WON $1M | Powerball not won, rolls over" in message
+    assert (
+        "Division 1: Lotto WON $1,000,000 (1 winner) | Powerball not won, rolls over"
+        in message
+    )
     assert "1. Main: 2 matched | Bonus: No | Powerball: No" in message
     assert "2. Main: 3 matched | Bonus: Yes | Powerball: No — Won $702!" in message
     assert "3. Main: 3 matched | Bonus: No | Powerball: Yes — Won $15 (Div 7)!" in message
     assert "Best line" not in message
+
+
+def test_format_result_message_division_one_plural_winners():
+    dividends = {
+        "lottoWinners": [
+            {"division": 1, "prizeValue": "500000.00", "numberOfWinners": 2},
+        ],
+        "powerballWinners": [
+            {
+                "division": 1,
+                "prizeValue": "10000000.00",
+                "numberOfWinners": 3,
+                "combinedPrizeValue": "15000000.00",
+            },
+        ],
+    }
+    message = format_result_message(_actual_row(), comparison=[], dividends=dividends)
+    assert (
+        "Division 1: Lotto WON $500,000 (2 winners) | "
+        "Powerball WON $15,000,000 (3 winners)"
+    ) in message

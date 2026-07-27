@@ -138,10 +138,18 @@ def division_one_status(dividends):
     lotto_div1 = _winner_by_division(dividends.get("lottoWinners", []), 1)
     pb_div1 = _winner_by_division(dividends.get("powerballWinners", []), 1)
 
-    lotto_won = lotto_div1 is not None and int(lotto_div1.get("numberOfWinners", 0)) > 0
-    powerball_won = pb_div1 is not None and int(pb_div1.get("numberOfWinners", 0)) > 0
+    lotto_winners = int((lotto_div1 or {}).get("numberOfWinners", 0))
+    powerball_winners = int((pb_div1 or {}).get("numberOfWinners", 0))
 
-    return {"lotto_won": lotto_won, "powerball_won": powerball_won}
+    lotto_won = lotto_div1 is not None and lotto_winners > 0
+    powerball_won = pb_div1 is not None and powerball_winners > 0
+
+    return {
+        "lotto_won": lotto_won,
+        "lotto_winners": lotto_winners,
+        "powerball_won": powerball_won,
+        "powerball_winners": powerball_winners,
+    }
 
 
 def _latest_completed_draw(draws_path=None):

@@ -128,6 +128,19 @@ def _format_prize_amount(amount):
     return f"${amount:,.2f}"
 
 
+def _format_division_one_prize_amount(amount):
+    """Format Division 1 prize amounts with comma thousands separators."""
+    if amount == int(amount):
+        return f"${int(amount):,}"
+    return f"${amount:,.2f}"
+
+
+def _division_one_winner_suffix(count):
+    if count == 1:
+        return " (1 winner)"
+    return f" ({count} winners)"
+
+
 def _division_one_line(dividends):
     """Build the Division 1 status line from draw dividend data."""
     from scorer import division_one_status, parse_prize_value, _winner_by_division
@@ -138,14 +151,22 @@ def _division_one_line(dividends):
 
     if status["lotto_won"]:
         lotto_prize = parse_prize_value(lotto_div1.get("prizeValue"))
-        lotto_text = f"WON {_format_prize_amount(lotto_prize)}" if lotto_prize else "WON"
+        winners = _division_one_winner_suffix(status["lotto_winners"])
+        if lotto_prize:
+            lotto_text = f"WON {_format_division_one_prize_amount(lotto_prize)}{winners}"
+        else:
+            lotto_text = f"WON{winners}"
     else:
         lotto_text = "not won"
 
     if status["powerball_won"]:
         pb_raw = pb_div1.get("combinedPrizeValue") or pb_div1.get("prizeValue")
         pb_prize = parse_prize_value(pb_raw)
-        pb_text = f"WON {_format_prize_amount(pb_prize)}" if pb_prize else "WON"
+        winners = _division_one_winner_suffix(status["powerball_winners"])
+        if pb_prize:
+            pb_text = f"WON {_format_division_one_prize_amount(pb_prize)}{winners}"
+        else:
+            pb_text = f"WON{winners}"
     else:
         pb_note = (pb_div1 or {}).get("prizeValue", "")
         pb_text = "not won, rolls over" if str(pb_note).upper() == "ROLLOVER" else "not won"
