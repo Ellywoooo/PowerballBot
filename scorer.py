@@ -72,6 +72,14 @@ def _actual_mains(actual_row):
 
 def determine_division(main_matches, bonus_match):
     """Return Lotto division 1-7 from main/bonus match counts, or None."""
+    # TODO: Confirm the official Division 8 criteria in NZ Lotto's published
+    # rules before 2026-09-13, then implement it here and remove this warning.
+    if config.get_powerball_max() == 14:
+        print(
+            "WARNING: POWERBALL DIVISION 8 LOGIC HAS NOT BEEN IMPLEMENTED. "
+            "PRIZE DIVISIONS MAY BE INCOMPLETE."
+        )
+
     if main_matches == 6:
         return 1
     if main_matches == 5 and bonus_match:

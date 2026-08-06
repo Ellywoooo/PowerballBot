@@ -1,3 +1,6 @@
+from datetime import date
+
+
 # --- Paths ---
 DATA_PATH = "data/draws_clean.csv"
 PREDICTIONS_LATEST_PATH = "predictions/latest.csv"
@@ -15,6 +18,13 @@ WEIGHT_GAP = 0.25
 
 # --- Analysis ---
 RECENT_DRAWS = 52
+POWERBALL_RULE_CHANGE_DATE = date(2026, 9, 13)
+POWERBALL_MIN = 1
+
+
+def get_powerball_max(today=None):
+    today = today or date.today()
+    return 14 if today >= POWERBALL_RULE_CHANGE_DATE else 10
 
 # --- Line generation ---
 NUM_LINES = 8

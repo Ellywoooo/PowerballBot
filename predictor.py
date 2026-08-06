@@ -2,7 +2,7 @@
 Predictor for the Powerball lottery.
 load_draws()           → read CSV, clean columns, sort by date
 compute_main_scores()  → freq + recency + gap → main_score Series
-compute_powerball_scores() → same for powerball 1–10
+compute_powerball_scores() → same for the currently active Powerball range
 passes_filters()       → odd/even + consecutive rules (from notebook)
 generate_lines()       → combos → filter → pick diverse lines + PB
 main()                 → wire it together, print results
@@ -112,16 +112,37 @@ def compute_main_scores(df):
 # 4. Return the powerball scores.
 # Output: pandas Series, the powerball scores.
 def compute_powerball_scores(df):
+    powerball_max = config.get_powerball_max()
+    powerball_numbers = range(config.POWERBALL_MIN, powerball_max + 1)
+
+    scoring_df = df
+    if powerball_max == 14:
+        draw_dates = pd.to_datetime(df["draw_date"]).dt.date
+        scoring_df = df.loc[draw_dates >= config.POWERBALL_RULE_CHANGE_DATE]
+
     # --- Frequency (all draws) ---
-    freq = df["powerball"].value_counts().sort_index()
+    freq = (
+        scoring_df["powerball"]
+        .value_counts()
+        .sort_index()
+        .reindex(powerball_numbers, fill_value=0)
+    )
 
     # --- Recency (last N draws) ---
-    recent_df = df.tail(config.RECENT_DRAWS)
+    recent_df = scoring_df.tail(config.RECENT_DRAWS)
     recent_freq = recent_df["powerball"].value_counts()
-    recent_rate = (recent_freq / len(recent_df)).reindex(range(1, 11), fill_value=0)
+    if recent_df.empty:
+        recent_rate = pd.Series(0.0, index=powerball_numbers)
+    else:
+        recent_rate = (recent_freq / len(recent_df)).reindex(
+            powerball_numbers, fill_value=0
+        )
 
     # --- Gap (draws since last seen) ---
-    gaps = {n: last_seen_gap(n, df, ["powerball"]) for n in range(1, 11)}
+    gaps = {
+        n: last_seen_gap(n, scoring_df, ["powerball"])
+        for n in powerball_numbers
+    }
     gap_series = pd.Series(gaps)
 
     # --- Normalize + combine ---
