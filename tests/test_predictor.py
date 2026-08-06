@@ -1,6 +1,6 @@
 """Tests for predictor filters, scoring, and generate_lines pool expansion."""
 
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 
 import pandas as pd
 import pytest
@@ -9,6 +9,7 @@ import config
 from predictor import (
     passes_filters,
     compute_main_scores,
+    compute_powerball_scores,
     generate_lines,
 )
 
@@ -67,6 +68,54 @@ def test_compute_main_scores_scaled_between_0_and_1():
     assert scores.notna().all()
     assert (scores >= 0).all()
     assert (scores <= 1).all()
+
+
+@pytest.mark.parametrize(
+    "today, expected",
+    [
+        (date(2026, 9, 1), 10),
+        (date(2026, 9, 13), 14),
+        (date(2026, 9, 20), 14),
+    ],
+)
+def test_get_powerball_max_switches_on_rule_change_date(today, expected):
+    assert config.get_powerball_max(today=today) == expected
+
+
+def test_compute_powerball_scores_filters_old_rule_draws_after_change(monkeypatch):
+    df = pd.DataFrame(
+        {
+            "draw_date": pd.to_datetime(
+                ["2026-09-01", "2026-09-05", "2026-09-13", "2026-09-16"]
+            ),
+            "powerball": [1, 1, 2, 14],
+        }
+    )
+    post_change_df = df[df["draw_date"].dt.date >= config.POWERBALL_RULE_CHANGE_DATE]
+    real_get_powerball_max = config.get_powerball_max
+
+    monkeypatch.setattr(
+        config,
+        "get_powerball_max",
+        lambda: real_get_powerball_max(today=date(2026, 9, 20)),
+    )
+    post_change_scores = compute_powerball_scores(df)
+    expected_post_change_scores = compute_powerball_scores(post_change_df)
+    pd.testing.assert_series_equal(
+        post_change_scores,
+        expected_post_change_scores,
+    )
+    assert list(post_change_scores.index) == list(range(1, 15))
+
+    monkeypatch.setattr(
+        config,
+        "get_powerball_max",
+        lambda: real_get_powerball_max(today=date(2026, 9, 1)),
+    )
+    pre_change_scores = compute_powerball_scores(df)
+    pre_change_without_old_draws = compute_powerball_scores(post_change_df)
+    assert not pre_change_scores.equals(pre_change_without_old_draws)
+    assert list(pre_change_scores.index) == list(range(1, 11))
 
 
 def test_generate_lines_expands_pool_without_crashing(monkeypatch):
