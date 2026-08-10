@@ -31,6 +31,9 @@ NUM_LINES = 8
 MAX_SHARED = 2
 CANDIDATE_POOL_SIZE = 18
 SAMPLE_POOL_SIZE = 100  # top-score combos to weighted-sample from
+SAMPLING_TEMPERATURE = 1.5  # 1.0 = no change; higher = flatter distribution
+RECENCY_PENALTY_LOOKBACK = 4
+RECENCY_PENALTY_STRENGTH = 0.25  # 0 = no penalty, 1 = max penalty
 
 # --- Crawler ---
 # API URL for Lotto NZ results

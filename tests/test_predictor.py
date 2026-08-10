@@ -4,13 +4,17 @@ from datetime import date, datetime, timedelta
 
 import pandas as pd
 import pytest
+import numpy as np
 
 import config
 from predictor import (
     passes_filters,
     compute_main_scores,
     compute_powerball_scores,
+    apply_recency_penalty,
     generate_lines,
+    _sampling_weights,
+    _mains_from_row,
 )
 
 
@@ -135,3 +139,104 @@ def test_generate_lines_expands_pool_without_crashing(monkeypatch):
     assert len(lines) <= config.NUM_LINES
     assert len(lines) >= 1
     assert set(lines.columns) >= {"line_no", "line", "powerball", "score"}
+
+
+def _steep_main_score():
+    return pd.Series({n: 1.0 - (n * 0.001) for n in range(1, 41)})
+
+
+def _flat_powerball_score():
+    return pd.Series({n: 0.5 for n in range(1, 11)})
+
+
+def _unique_numbers_from_sampling(sampling_score, available, n_runs=20, seed=0):
+    rng = np.random.default_rng(seed)
+    numbers = set()
+
+    for _ in range(n_runs):
+        probs = _sampling_weights(available, sampling_score)
+        idx = int(rng.choice(len(available), p=probs))
+        numbers.update(_mains_from_row(available.iloc[idx]))
+
+    return len(numbers)
+
+
+def _write_fake_history(path, draws, number_in_every_line=7):
+    rows = [
+        "Draw,Line,Number 1,Number 2,Number 3,Number 4,Number 5,Number 6,"
+        "Powerball,Score,Main Matches,Bonus Match,Powerball Match,Division,"
+        "Prize Amount,Prize Note,Predicted At"
+    ]
+    for draw_idx, draw in enumerate(draws):
+        predicted_at = f"2026-07-{10 + draw_idx:02d}T12:00:00+00:00"
+        for line in range(1, 9):
+            nums = [number_in_every_line] * 6
+            rows.append(
+                f"{draw},{line},{nums[0]},{nums[1]},{nums[2]},"
+                f"{nums[3]},{nums[4]},{nums[5]},1,3.0,0,False,False,,,,"
+                f"{predicted_at}"
+            )
+    path.write_text("\n".join(rows) + "\n", encoding="utf-8")
+
+
+def test_temperature_flattens_distribution(monkeypatch):
+    """Temperature scaling flattens sampling weights used inside generate_lines()."""
+    sampling_score = pd.Series(
+        {n: max(0.01, 1.5 - (n * 0.08)) for n in range(1, 41)}
+    )
+    available = pd.DataFrame(
+        [
+            {"m1": 1, "m2": 2, "m3": 3, "m4": 4, "m5": 5, "m6": 6, "score": 6.0},
+            {"m1": 7, "m2": 8, "m3": 9, "m4": 10, "m5": 11, "m6": 12, "score": 5.0},
+            {"m1": 13, "m2": 14, "m3": 15, "m4": 16, "m5": 17, "m6": 18, "score": 4.0},
+        ]
+    )
+
+    monkeypatch.setattr(config, "SAMPLING_TEMPERATURE", 1.0)
+    low_temp_probs = _sampling_weights(available, sampling_score)
+
+    monkeypatch.setattr(config, "SAMPLING_TEMPERATURE", 3.0)
+    high_temp_probs = _sampling_weights(available, sampling_score)
+
+    assert high_temp_probs.max() < low_temp_probs.max()
+    assert high_temp_probs.std() < low_temp_probs.std()
+
+    monkeypatch.setattr(config, "SAMPLING_TEMPERATURE", 1.0)
+    low_temp_variety = _unique_numbers_from_sampling(
+        pd.Series({n: (100.0 if n <= 6 else 0.01) for n in range(1, 41)}),
+        available,
+    )
+
+    monkeypatch.setattr(config, "SAMPLING_TEMPERATURE", 3.0)
+    high_temp_variety = _unique_numbers_from_sampling(
+        pd.Series({n: (100.0 if n <= 6 else 0.01) for n in range(1, 41)}),
+        available,
+    )
+
+    assert high_temp_variety > low_temp_variety
+
+
+def test_recency_penalty_reduces_score_for_frequent_numbers(tmp_path):
+    history = tmp_path / "history.csv"
+    _write_fake_history(history, draws=[2601, 2602, 2603, 2604])
+
+    main_score = pd.Series({n: 0.8 for n in range(1, 41)})
+    adjusted = apply_recency_penalty(
+        main_score,
+        history_path=history,
+        lookback_draws=4,
+        penalty_strength=0.25,
+    )
+
+    assert adjusted[7] < main_score[7]
+    assert adjusted[33] == main_score[33]
+    assert (main_score[7] - adjusted[7]) > (main_score[33] - adjusted[33])
+
+
+def test_recency_penalty_no_history_file_returns_unchanged(tmp_path):
+    main_score = pd.Series({n: 0.5 + (n * 0.01) for n in range(1, 41)})
+    missing = tmp_path / "does_not_exist.csv"
+
+    adjusted = apply_recency_penalty(main_score, history_path=missing)
+
+    pd.testing.assert_series_equal(adjusted, main_score)

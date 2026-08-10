@@ -15,10 +15,21 @@ lines = generate_lines(main_score, powerball_score)
 print(lines)
 """
 
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
 import config
 from itertools import combinations # for generating combinations of numbers.
+
+HISTORY_NUMBER_COLS = [
+    "Number 1",
+    "Number 2",
+    "Number 3",
+    "Number 4",
+    "Number 5",
+    "Number 6",
+]
 
 # Load the draws from the CSV file.
 # Input: path to the CSV file.
@@ -195,6 +206,73 @@ def _mains_from_row(row):
 def _too_similar(mains, chosen, max_shared=config.MAX_SHARED):
     return any(len(set(mains) & set(prev)) > max_shared for prev in chosen)
 
+
+def apply_recency_penalty(
+    main_score,
+    history_path=config.PREDICTIONS_HISTORY_PATH,
+    lookback_draws=config.RECENCY_PENALTY_LOOKBACK,
+    penalty_strength=config.RECENCY_PENALTY_STRENGTH,
+):
+    """
+    Reduce scores slightly for numbers that appeared often in the last
+    N archived draws' predictions, to encourage variety across weeks.
+    Returns a new adjusted score Series; does not mutate main_score.
+    """
+    path = Path(history_path)
+    if not path.exists() or path.stat().st_size == 0:
+        return main_score.copy()
+
+    history = pd.read_csv(path)
+    if history.empty or "Draw" not in history.columns:
+        return main_score.copy()
+
+    if "Predicted At" in history.columns:
+        history = history.copy()
+        history["Predicted At"] = pd.to_datetime(history["Predicted At"])
+        recent_draw_ids = (
+            history.sort_values("Predicted At", ascending=False)
+            .drop_duplicates("Draw")["Draw"]
+            .head(lookback_draws)
+        )
+    else:
+        recent_draw_ids = history["Draw"].drop_duplicates().tail(lookback_draws)
+
+    recent = history[history["Draw"].isin(recent_draw_ids)]
+    if recent.empty:
+        return main_score.copy()
+
+    number_cols = [col for col in HISTORY_NUMBER_COLS if col in recent.columns]
+    if not number_cols:
+        return main_score.copy()
+
+    counts = recent[number_cols].to_numpy().flatten()
+    appearance_counts = pd.Series(counts).value_counts()
+    max_appearances = lookback_draws * 6
+    normalized_counts = {
+        n: appearance_counts.get(n, 0) / max_appearances
+        for n in range(1, 41)
+    }
+
+    adjusted = main_score.copy()
+    for number, normalized_count in normalized_counts.items():
+        if number in adjusted.index:
+            adjusted.loc[number] *= 1 - (normalized_count * penalty_strength)
+
+    return adjusted
+
+
+def _sampling_weights(available, sampling_score):
+    """Combo scores from penalized per-number scores for weighted sampling."""
+    weights = np.array(
+        [sampling_score.loc[_mains_from_row(row)].sum() for _, row in available.iterrows()],
+        dtype=float,
+    )
+    if weights.sum() <= 0:
+        weights = np.ones(len(available), dtype=float)
+    temperature = config.SAMPLING_TEMPERATURE
+    adjusted = np.power(weights + 1e-6, 1 / temperature)
+    return adjusted / adjusted.sum()
+
 # Generate the lines.
 # Input: main_score, powerball_score, optional seed.
 # Process:
@@ -207,6 +285,7 @@ def _too_similar(mains, chosen, max_shared=config.MAX_SHARED):
 # Output: pandas DataFrame of NUM_LINES lines.
 def generate_lines(main_score, powerball_score, seed=None):
   rng = np.random.default_rng(seed)
+  sampling_score = apply_recency_penalty(main_score)
 
   candidates = main_score.sort_values(ascending=False).head(config.CANDIDATE_POOL_SIZE).index.tolist()
 
@@ -242,10 +321,7 @@ def generate_lines(main_score, powerball_score, seed=None):
     pool_start += config.SAMPLE_POOL_SIZE
 
     while len(chosen_mains) < config.NUM_LINES and len(available) > 0:
-      weights = available["score"].to_numpy(dtype=float)
-      if weights.sum() <= 0:
-        weights = np.ones(len(available), dtype=float)
-      probs = weights / weights.sum()
+      probs = _sampling_weights(available, sampling_score)
 
       idx = int(rng.choice(len(available), p=probs))
       mains = _mains_from_row(available.iloc[idx])
