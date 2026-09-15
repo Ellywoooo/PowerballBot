@@ -3,6 +3,7 @@
 import pandas as pd
 import pytest
 
+import config
 from notifier import format_result_message
 from scorer import (
     save_predictions,
@@ -98,6 +99,12 @@ def _fake_dividends():
                 "numberOfWinners": 32073,
                 "combinedPrizeValue": "Bonus Ticket + 15.00",
             },
+            {
+                "division": 8,
+                "prizeValue": "12.00",
+                "numberOfWinners": 1000,
+                "combinedPrizeValue": "12.00",
+            },
         ],
     }
 
@@ -113,12 +120,24 @@ def _fake_dividends():
         (4, False, 5),
         (3, True, 6),
         (3, False, 7),
-        (2, True, None),
+        (2, True, None),  # Division 8 requires Powerball match as well
         (0, False, None),
     ],
 )
 def test_determine_division(main_matches, bonus_match, expected):
     assert determine_division(main_matches, bonus_match) == expected
+
+
+def test_determine_division_8_requires_powerball_under_new_rules(monkeypatch):
+    monkeypatch.setattr(config, "get_powerball_max", lambda today=None: 14)
+    assert determine_division(2, True, powerball_match=True) == 8
+    assert determine_division(2, True, powerball_match=False) is None
+    assert determine_division(2, False, powerball_match=True) is None
+
+
+def test_determine_division_8_inactive_under_old_rules(monkeypatch):
+    monkeypatch.setattr(config, "get_powerball_max", lambda today=None: 10)
+    assert determine_division(2, True, powerball_match=True) is None
 
 
 def test_parse_prize_value():
@@ -219,6 +238,26 @@ def test_compare_bonus_ticket_prize_note(tmp_path):
     assert comparison[0]["division"] == 7
     assert comparison[0]["prize_amount"] is None
     assert comparison[0]["prize_note"] == "Bonus Ticket"
+
+
+def test_compare_division_8_powerball_prize(tmp_path, monkeypatch):
+    monkeypatch.setattr(config, "get_powerball_max", lambda today=None: 14)
+    latest = tmp_path / "latest.csv"
+    # 2 mains + bonus + PB -> Powerball Division 8 ($12)
+    # actual mains: 10,21,22,26,37,40 bonus 15 PB 7
+    save_predictions(
+        _single_line_df(line="10 15 21 30 31 32", powerball=7),
+        path=latest,
+    )
+    comparison = compare_prediction_to_actual(
+        _actual_row(), path=latest, dividends=_fake_dividends()
+    )
+    assert comparison[0]["main_matches"] == 2
+    assert comparison[0]["bonus_match"] is True
+    assert comparison[0]["powerball_match"] is True
+    assert comparison[0]["division"] == 8
+    assert comparison[0]["prize_amount"] == 12.0
+    assert comparison[0]["prize_note"] is None
 
 
 def test_archive_predictions_skips_duplicate_draw(tmp_path, monkeypatch):

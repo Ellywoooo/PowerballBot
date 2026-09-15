@@ -70,16 +70,14 @@ def _actual_mains(actual_row):
     return [int(actual_row[c]) for c in ACTUAL_MAIN_COLS]
 
 
-def determine_division(main_matches, bonus_match):
-    """Return Lotto division 1-7 from main/bonus match counts, or None."""
-    # TODO: Confirm the official Division 8 criteria in NZ Lotto's published
-    # rules before 2026-09-13, then implement it here and remove this warning.
-    if config.get_powerball_max() == 14:
-        print(
-            "WARNING: POWERBALL DIVISION 8 LOGIC HAS NOT BEEN IMPLEMENTED. "
-            "PRIZE DIVISIONS MAY BE INCOMPLETE."
-        )
+def determine_division(main_matches, bonus_match, powerball_match=False):
+    """
+    Return prize division from match counts, or None.
 
+    Divisions 1-7 are the standard Lotto tiers (main + optional bonus).
+    From 2026-09-13, Powerball Division 8 is: 2 mains + bonus + Powerball.
+    Division 8 only applies when the Powerball also matches on that line.
+    """
     if main_matches == 6:
         return 1
     if main_matches == 5 and bonus_match:
@@ -94,6 +92,14 @@ def determine_division(main_matches, bonus_match):
         return 6
     if main_matches == 3:
         return 7
+    # Powerball Division 8 (active once Powerball range is 1-14).
+    if (
+        config.get_powerball_max() == 14
+        and main_matches == 2
+        and bonus_match
+        and powerball_match
+    ):
+        return 8
     return None
 
 
@@ -282,7 +288,9 @@ def compare_prediction_to_actual(
         }
 
         if dividends is not None:
-            division = determine_division(main_matches, bonus_match)
+            division = determine_division(
+                main_matches, bonus_match, powerball_match=powerball_match
+            )
             prize_amount, prize_note = _lookup_prize(
                 dividends, division, powerball_match
             )
