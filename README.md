@@ -75,14 +75,14 @@ results (Wed/Sat ~evening NZ)
   - **Frequency** (40%) — how often the number appears across all history (mains use columns including the bonus ball)
   - **Recency** (35%) — appearance rate over the last **52** draws
   - **Gap** (25%) — draws since the number was last seen  
-  Main pool: **1–40**. Powerball pool: **1–10**.
+  Main pool: **1–40**. Powerball pool: **1–14** from 2026-09-13 (was 1–10).
 - **`passes_filters()`** — Rejects lines that are all-odd or all-even, or that contain **4+** consecutive numbers.
 - **`generate_lines()`** — Takes the top **18** main numbers by score, builds valid 6-number combinations, keeps a high-score sampling pool, then weighted-random samples **8** diverse lines (at most **2** numbers shared with any already chosen line). Powerballs are chosen randomly from the top **5** Powerball scores.
 
 ### `scorer.py`
 
 - **`save_predictions()`** — Writes `predictions/latest.csv` after generate (Draw left blank until results).
-- **`compare_prediction_to_actual()`** — Per line: main-match count, bonus match, Powerball match; if dividends are provided, maps to Lotto division 1–7 and looks up prize amount (Powerball combined prize when PB matches).
+- **`compare_prediction_to_actual()`** — Per line: main-match count, bonus match, Powerball match; if dividends are provided, maps to prize division 1–8 and looks up prize amount (Powerball combined prize when PB matches). Division 8 is Powerball-only: 2 mains + bonus + Powerball.
 - **`archive_predictions()`** — Fills Draw on `latest.csv` and appends scored rows to `predictions/history.csv` (skips if that draw is already archived).
 - **`should_skip_predict()`** — Blocks a duplicate predict run when the latest completed draw is already in history but `latest.csv` still has a pending (blank) Draw.
 
@@ -235,7 +235,7 @@ Coverage includes crawler parsing/append behaviour, scoring and filters, line ge
 
 ## Data
 
-**Game:** NZ Lotto Powerball — 6 main numbers (1–40) + bonus (same pool) + Powerball (1–10).
+**Game:** NZ Lotto Powerball — 6 main numbers (1–40) + bonus (same pool) + Powerball (1–14 from 2026-09-13; previously 1–10).
 
 **Store:** `data/draws_clean.csv` — cleaned historical results from 2008 through present (~1,500+ draws). Ongoing updates append only the latest draw from the public Lotto NZ results API.
 
@@ -245,7 +245,7 @@ Coverage includes crawler parsing/append behaviour, scoring and filters, line ge
 | `Date` | Draw date (`YYYY-MM-DD`) |
 | `Winning Number 1` … `6` | Main numbers |
 | `Bonus Number` | Bonus ball (used in frequency analysis; not picked as a “main” in generated lines) |
-| `Powerball` | Powerball (1–10) |
+| `Powerball` | Powerball (1–14 from 2026-09-13; previously 1–10) |
 
 ---
 
