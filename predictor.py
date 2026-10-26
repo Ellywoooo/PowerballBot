@@ -209,15 +209,22 @@ def _too_similar(mains, chosen, max_shared=config.MAX_SHARED):
 
 def apply_recency_penalty(
     main_score,
-    history_path=config.PREDICTIONS_HISTORY_PATH,
-    lookback_draws=config.RECENCY_PENALTY_LOOKBACK,
-    penalty_strength=config.RECENCY_PENALTY_STRENGTH,
+    history_path=None,
+    lookback_draws=None,
+    penalty_strength=None,
 ):
     """
     Reduce scores slightly for numbers that appeared often in the last
     N archived draws' predictions, to encourage variety across weeks.
     Returns a new adjusted score Series; does not mutate main_score.
     """
+    history_path = history_path or config.PREDICTIONS_HISTORY_PATH
+    lookback_draws = (
+        config.RECENCY_PENALTY_LOOKBACK if lookback_draws is None else lookback_draws
+    )
+    penalty_strength = (
+        config.RECENCY_PENALTY_STRENGTH if penalty_strength is None else penalty_strength
+    )
     path = Path(history_path)
     if not path.exists() or path.stat().st_size == 0:
         return main_score.copy()
@@ -261,6 +268,11 @@ def apply_recency_penalty(
     return adjusted
 
 
+def _powerball_pool(powerball_score):
+    """Use every number in the active Powerball range, not only top scores."""
+    return powerball_score.index.to_numpy()
+
+
 def _sampling_weights(available, sampling_score):
     """Combo scores from penalized per-number scores for weighted sampling."""
     weights = np.array(
@@ -281,7 +293,7 @@ def _sampling_weights(available, sampling_score):
 # 3. Sort by score, keep top SAMPLE_POOL_SIZE as the sampling pool.
 # 4. Weighted-random sample without replacement (higher score → higher chance),
 #    rejecting combos that are too similar to ones already chosen.
-# 5. Assign Powerballs randomly from the top Powerball candidates.
+# 5. Assign Powerballs randomly from the full active Powerball range.
 # Output: pandas DataFrame of NUM_LINES lines.
 def generate_lines(main_score, powerball_score, seed=None):
   rng = np.random.default_rng(seed)
@@ -331,11 +343,12 @@ def generate_lines(main_score, powerball_score, seed=None):
 
       available = available.drop(available.index[idx]).reset_index(drop=True)
 
-  top_pbs = powerball_score.sort_values(ascending=False).head(5).index.to_numpy()
+  # Cover the full Powerball pool (1-10 or 1-14), not only the top scores.
+  pb_pool = _powerball_pool(powerball_score)
 
   final_rows = []
   for i, mains in enumerate(chosen_mains):
-    pb = int(rng.choice(top_pbs))
+    pb = int(rng.choice(pb_pool))
     final_rows.append({
       "line_no": i + 1,
       "line": " ".join(f"{n:02d}" for n in mains),

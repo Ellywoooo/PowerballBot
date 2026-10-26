@@ -7,7 +7,7 @@ An automated NZ Lotto Powerball suggestion and results-tracking bot.
 
 ## What this project does
 
-Twice a week (Wednesday and Saturday), the bot scores historical NZ Lotto draws, generates **8 statistically weighted number lines**, and posts them to Slack — optionally including the advertised Powerball jackpot. After the draw, it fetches the official result and dividends, compares each saved prediction line to the actual numbers, and reports matches, Lotto divisions, and prize amounts back to Slack.
+Twice a week (Wednesday and Saturday), the bot scores historical NZ Lotto draws, generates **12 coverage-weighted number lines**, and posts them to Slack — optionally including the advertised Powerball jackpot. After the draw, it fetches the official result and dividends, compares each saved prediction line to the actual numbers, and reports matches, Lotto divisions, and prize amounts back to Slack.
 
 **This does not predict lottery outcomes.** Draws are random and independent; no scoring method improves the real odds of winning. The project exists to practice building a real automated data pipeline: ingestion, analysis, persistence, notifications, scheduling, containerization, and tests.
 
@@ -17,7 +17,7 @@ Twice a week (Wednesday and Saturday), the bot scores historical NZ Lotto draws,
 
 ## Example output
 
-**Prediction** (Slack — 8 weighted lines + optional jackpot):
+**Prediction** (Slack — 12 weighted lines + optional jackpot):
 
 ![Prediction example](docs/screenshots/prediction-example.png)
 
@@ -37,7 +37,7 @@ predict (Wed/Sat ~afternoon NZ)
   draws_clean.csv
         │
         ▼
-  predictor.py  →  score numbers → generate 8 lines
+  predictor.py  →  score numbers → generate 12 lines
         │
         ▼
   scorer.py     →  save predictions/latest.csv  (Draw blank)
@@ -77,7 +77,7 @@ results (Wed/Sat ~evening NZ)
   - **Gap** (25%) — draws since the number was last seen  
   Main pool: **1–40**. Powerball pool: **1–14** from 2026-09-13 (was 1–10).
 - **`passes_filters()`** — Rejects lines that are all-odd or all-even, or that contain **4+** consecutive numbers.
-- **`generate_lines()`** — Takes the top **18** main numbers by score, builds valid 6-number combinations, keeps a high-score sampling pool, then weighted-random samples **8** diverse lines (at most **2** numbers shared with any already chosen line). Powerballs are chosen randomly from the top **5** Powerball scores.
+- **`generate_lines()`** — Takes the top **22** main numbers by score, builds valid 6-number combinations, keeps a high-score sampling pool, then weighted-random samples **12** diverse lines (at most **2** numbers shared with any already chosen line). Powerballs are chosen randomly from the **full** active Powerball range (1–14).
 
 ### `scorer.py`
 
@@ -163,7 +163,7 @@ Never commit `.env` — it is gitignored.
 ## Running locally
 
 ```powershell
-# Generate 8 lines, save predictions/latest.csv, post to Slack
+# Generate 12 lines, save predictions/latest.csv, post to Slack
 python main.py --mode predict
 
 # Fetch latest draw, score predictions, archive, post results
@@ -199,10 +199,11 @@ Requires repository secret: `SLACK_WEBHOOK_URL`.
 
 | Setting | Value | Meaning |
 |---------|-------|---------|
-| `WEIGHT_FREQ` / `RECENCY` / `GAP` | 0.40 / 0.35 / 0.25 | Scoring blend (must sum to 1.0) |
+| `WEIGHT_FREQ` / `RECENCY` / `GAP` | 0.30 / 0.35 / 0.35 | Scoring blend (must sum to 1.0) |
 | `RECENT_DRAWS` | 52 | Window for recency rate |
-| `NUM_LINES` | 8 | Lines posted each predict run |
-| `CANDIDATE_POOL_SIZE` | 18 | Top mains used to build combinations |
+| `NUM_LINES` | 12 | Lines posted each predict run |
+| `CANDIDATE_POOL_SIZE` | 22 | Top mains used to build combinations |
+| `SAMPLING_TEMPERATURE` | 2.0 | Higher = flatter sampling, more variety |
 | `MAX_SHARED` | 2 | Diversity cap between chosen lines |
 | `REQUEST_DELAY_*` | 1.5–3.0 s | Polite delay before crawler requests |
 
