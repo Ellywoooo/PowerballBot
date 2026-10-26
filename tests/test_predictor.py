@@ -15,6 +15,7 @@ from predictor import (
     generate_lines,
     _sampling_weights,
     _mains_from_row,
+    _powerball_pool,
 )
 
 
@@ -122,6 +123,16 @@ def test_compute_powerball_scores_filters_old_rule_draws_after_change(monkeypatc
     assert list(pre_change_scores.index) == list(range(1, 11))
 
 
+def test_generate_lines_samples_powerball_from_full_range():
+    # High scores on 10-14; old top-5 logic would only keep those.
+    powerball_score = pd.Series(
+        {n: 0.01 if n <= 5 else 0.9 for n in range(1, 15)}
+    )
+    pool = set(_powerball_pool(powerball_score))
+    assert pool == set(range(1, 15))
+    assert pool >= set(range(1, 6))
+
+
 def test_generate_lines_expands_pool_without_crashing(monkeypatch):
     """
     Tiny SAMPLE_POOL_SIZE forces the sliding window to expand beyond the
@@ -129,6 +140,8 @@ def test_generate_lines_expands_pool_without_crashing(monkeypatch):
     """
     monkeypatch.setattr(config, "SAMPLE_POOL_SIZE", 5)
     monkeypatch.setattr(config, "NUM_LINES", 8)
+    monkeypatch.setattr(config, "CANDIDATE_POOL_SIZE", 18)
+    monkeypatch.setattr(config, "PREDICTIONS_HISTORY_PATH", "nonexistent/history.csv")
 
     # Top scores clustered on neighbouring numbers → early pool is too similar.
     main_score = pd.Series({n: 1.0 - (n * 0.001) for n in range(1, 41)})

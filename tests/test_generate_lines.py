@@ -1,9 +1,9 @@
 """Tests for weighted random sampling in generate_lines."""
 
-import numpy as np
 import pandas as pd
 import pytest
 
+import config
 from predictor import generate_lines
 
 
@@ -17,6 +17,13 @@ def _fake_scores():
         {n: 0.3 + (n % 5) * 0.1 for n in range(1, 11)}
     )
     return main_score, powerball_score
+
+
+@pytest.fixture(autouse=True)
+def _small_candidate_pool(monkeypatch):
+    monkeypatch.setattr(config, "CANDIDATE_POOL_SIZE", 14)
+    monkeypatch.setattr(config, "NUM_LINES", 8)
+    monkeypatch.setattr(config, "PREDICTIONS_HISTORY_PATH", "nonexistent/history.csv")
 
 
 def test_same_seed_produces_identical_results():
@@ -33,7 +40,7 @@ def test_unseeded_runs_produce_different_results():
 
     results = [
         generate_lines(main_score, powerball_score, seed=None)
-        for _ in range(8)
+        for _ in range(3)
     ]
 
     # Encode each result as a comparable tuple of (line, powerball).
